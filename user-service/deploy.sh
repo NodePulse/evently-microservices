@@ -128,7 +128,7 @@ case $choice in
         pm2 delete user-service 2>/dev/null || true
         
         # Start with PM2
-        pm2 start dist/main.js --name user-service
+        pm2 start dist/src/main.js --name user-service
         pm2 save
         
         print_success "Application started with PM2"
