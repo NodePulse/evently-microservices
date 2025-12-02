@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { AuthController } from './auth/auth.controller';
 import { AccountModule } from './account/account.module';
 import { HealthController } from './health/health.controller';
+import { ProfileModule } from './profile/profile.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { HealthController } from './health/health.controller';
     }),
     AuthModule,
     AccountModule,
+    ProfileModule,
   ],
   controllers: [AuthController, HealthController],
   providers: [],

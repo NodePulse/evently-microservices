@@ -19,12 +19,16 @@ import { ChangeForgotPasswordDto } from './dto/change-forgot-password.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import type { Response } from 'express';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiRegisterDocs, ApiLoginDocs, ApiLogoutDocs } from '../docs/AuthDocs';
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
+  @ApiRegisterDocs()
   @UsePipes(new ValidationPipe({ transform: true }))
   async registerUser(@Body() registerDto: RegisterDto) {
     const requestId = uuidv4();
@@ -32,6 +36,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @ApiLoginDocs()
   @UsePipes(new ValidationPipe({ transform: true }))
   async login(
     @Body() loginDto: LoginDto,
@@ -41,13 +46,8 @@ export class AuthController {
     return this.authService.login(requestId, loginDto, res);
   }
 
-  @Post('refresh')
-  refresh(@Req() req, @Res({ passthrough: true }) res: Response) {
-    const requestId = uuidv4();
-    return this.authService.refreshTokens(requestId, req, res);
-  }
-
   @Post('logout')
+  @ApiLogoutDocs()
   async logout(
     @Headers() headers: any,
     @Res({ passthrough: true }) res: Response,

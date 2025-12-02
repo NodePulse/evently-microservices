@@ -7,6 +7,7 @@ import {
   Matches,
   IsEnum,
 } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum Gender {
   MALE = 'Male',
@@ -15,9 +16,18 @@ export enum Gender {
 }
 
 export class RegisterDto {
+  @ApiProperty({
+    example: 'user@example.com',
+    description: 'The email address of the user',
+  })
   @IsEmail({}, { message: 'Invalid email address' })
   email: string;
 
+  @ApiProperty({
+    example: 'new_user',
+    description:
+      'The username of the user (3-50 chars, alphanumeric + underscore)',
+  })
   @IsString()
   @MinLength(3, { message: 'Username must be at least 3 characters' })
   @MaxLength(50, { message: 'Username cannot exceed 50 characters' })
@@ -26,6 +36,11 @@ export class RegisterDto {
   })
   username: string;
 
+  @ApiProperty({
+    example: 'Password123',
+    description:
+      'The password of the user (min 8 chars, 1 uppercase, 1 lowercase, 1 number)',
+  })
   @IsString()
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(128, { message: 'Password cannot exceed 128 characters' })
@@ -35,9 +50,18 @@ export class RegisterDto {
   })
   password: string;
 
+  @ApiProperty({
+    enum: Gender,
+    example: Gender.MALE,
+    description: 'The gender of the user',
+  })
   @IsEnum(Gender, { message: 'Gender must be Male, Female, or Other' })
   gender: Gender;
 
+  @ApiPropertyOptional({
+    example: 'John Doe',
+    description: 'The full name of the user',
+  })
   @IsString()
   @IsOptional()
   name?: string;

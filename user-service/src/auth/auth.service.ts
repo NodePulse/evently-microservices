@@ -47,34 +47,11 @@ export class AuthService {
     });
   }
 
-  private async getTokens(payload: JwtPayload) {
-    const accessToken = await this.jwtService.signAsync(payload, {
-      secret: env.JWT_ACCESS_SECRET, // add to your env
-      expiresIn: '15m',
-    });
-
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: env.JWT_REFRESH_SECRET, // add to your env
-      expiresIn: '7d',
-    });
-
-    return { accessToken, refreshToken };
-  }
-
-  // 👉 Hash + store refresh token
-  private async updateRefreshTokenHash(userId: string, refreshToken: string) {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { hashedRefreshToken },
-    });
-  }
-
-  // 👉 Clear refresh token on logout
-  private async clearRefreshToken(userId: string) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { hashedRefreshToken: null },
+  // ✅ NEW: only access token, no refresh
+  private async getAccessToken(payload: JwtPayload) {
+    return this.jwtService.signAsync(payload, {
+      secret: env.JWT_ACCESS_SECRET, // or env.JWT_SECRET – just keep it consistent
+      expiresIn: '24h', // or '1d' – your choice
     });
   }
 
@@ -104,9 +81,8 @@ export class AuthService {
 
   async register(requestId: string, registerDto: RegisterDto) {
     try {
-      const { email, username, password, gender } = registerDto;
+      const { email, username, password, gender, name } = registerDto;
 
-      // Check for existing user
       const existingUser = await this.prisma.user.findUnique({
         where: { email },
       });
@@ -118,7 +94,6 @@ export class AuthService {
         });
       }
 
-      // Check for existing username
       const existingUsername = await this.prisma.user.findUnique({
         where: { username },
       });
@@ -141,6 +116,7 @@ export class AuthService {
           image: imageUrl,
           role: 'USER',
           gender,
+          name,
         },
         select: {
           id: true,
@@ -161,10 +137,11 @@ export class AuthService {
         username: newUser.username,
         role: newUser.role,
       };
-      const { accessToken, refreshToken } = await this.getTokens(payload);
-      await this.updateRefreshTokenHash(newUser.id, refreshToken);
 
-      // Publish user created event
+      // ✅ Only access token
+      const accessToken = await this.getAccessToken(payload);
+
+      // still publish event
       try {
         await eventPublisher.publishUserCreated({
           id: newUser.id,
@@ -183,7 +160,10 @@ export class AuthService {
       return {
         status: 201,
         message: 'Registration successful',
-        data: { ...newUser, accessToken, refreshToken },
+        data: {
+          ...newUser,
+          accessToken, // ✅ only this
+        },
       };
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -214,12 +194,14 @@ export class AuthService {
           passwordHash: true,
           createdAt: true,
           updatedAt: true,
+          lastLoginAt: true,
         },
       });
 
       if (!user || !user.passwordHash) {
         this.logger.warn(`Invalid credentials: ${email}`);
         throw new UnauthorizedException({
+          status: 401,
           message: 'Invalid credentials',
           code: ERROR_CODES.INVALID_CREDENTIALS,
         });
@@ -234,6 +216,12 @@ export class AuthService {
         });
       }
 
+      user.lastLoginAt = new Date();
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: user.lastLoginAt },
+      });
+
       const payload: JwtPayload = {
         userId: user.id,
         email: user.email,
@@ -241,8 +229,7 @@ export class AuthService {
         role: user.role,
       };
 
-      const { accessToken, refreshToken } = await this.getTokens(payload);
-      await this.updateRefreshTokenHash(user.id, refreshToken);
+      const accessToken = await this.getAccessToken(payload);
 
       const responseData = {
         id: user.id,
@@ -254,17 +241,8 @@ export class AuthService {
         role: user.role,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        accessToken,
-        refreshToken,
+        accessToken, // ✅ only this
       };
-
-      // res.cookie('refreshToken', refreshToken, {
-      //   httpOnly: true,
-      //   secure: env.NODE_ENV === 'production',
-      //   sameSite: 'lax',
-      //   path: '/',
-      //   maxAge: 7 * 24 * 60 * 60 * 1000,
-      // });
 
       this.logger.log(`User logged in successfully: ${user.id}`);
       return {
@@ -286,18 +264,9 @@ export class AuthService {
 
   async logout(requestId: string, headers: any, res: Response) {
     try {
-      const userId = headers?.userId;
-      if (userId) {
-        await this.clearRefreshToken(userId);
-      }
-      // res.clearCookie('refreshToken', {
-      //   httpOnly: true,
-      //   secure: env.NODE_ENV === 'production',
-      //   sameSite: 'lax',
-      //   path: '/',
-      // });
-
-      this.logger.log(`User logged out successfully: ${headers?.userId}`);
+      // ✅ With stateless JWT, logout is mostly a client concern
+      // Optionally log / audit here
+      this.logger.log(`User logged out (stateless): ${headers?.userId}`);
       return {
         status: 200,
         message: 'Logged out successfully',
@@ -308,97 +277,6 @@ export class AuthService {
         message: 'Logout failed. Please try again later',
         code: ERROR_CODES.LOGOUT_ERROR,
       });
-    }
-  }
-
-  async refreshTokens(requestId: string, req: any, res: Response) {
-    try {
-      const refreshToken = req.cookies?.refreshToken;
-
-      if (!refreshToken) {
-        throw new UnauthorizedException({
-          message: 'Refresh token missing',
-          code: ERROR_CODES.INVALID_REFRESH_TOKEN,
-        });
-      }
-
-      let payload: JwtPayload;
-      try {
-        payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
-          secret: env.JWT_REFRESH_SECRET,
-        });
-      } catch (err) {
-        throw new UnauthorizedException({
-          message: 'Invalid or expired refresh token',
-          code: ERROR_CODES.INVALID_REFRESH_TOKEN,
-        });
-      }
-
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.userId },
-        select: {
-          id: true,
-          email: true,
-          username: true,
-          role: true,
-          hashedRefreshToken: true,
-        },
-      });
-
-      if (!user || !user.hashedRefreshToken) {
-        throw new UnauthorizedException({
-          message: 'Refresh token not found',
-          code: ERROR_CODES.INVALID_REFRESH_TOKEN,
-        });
-      }
-
-      const isMatch = await bcrypt.compare(
-        refreshToken,
-        user.hashedRefreshToken,
-      );
-      if (!isMatch) {
-        throw new UnauthorizedException({
-          message: 'Invalid refresh token',
-          code: ERROR_CODES.INVALID_REFRESH_TOKEN,
-        });
-      }
-
-      const newPayload: JwtPayload = {
-        userId: user.id,
-        email: user.email,
-        username: user.username,
-        role: user.role,
-      };
-
-      const { accessToken, refreshToken: newRefreshToken } =
-        await this.getTokens(newPayload);
-
-      await this.updateRefreshTokenHash(user.id, newRefreshToken);
-
-      // res.cookie('refreshToken', newRefreshToken, {
-      //   httpOnly: true,
-      //   secure: env.NODE_ENV === 'production',
-      //   sameSite: 'lax',
-      //   path: '/',
-      //   maxAge: 7 * 24 * 60 * 60 * 1000,
-      // });
-
-      return {
-        status: 200,
-        message: 'Tokens refreshed successfully',
-        data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            username: user.username,
-            role: user.role,
-          },
-          accessToken,
-          refreshToken: newRefreshToken,
-        },
-      };
-    } catch (error) {
-      throw error;
     }
   }
 

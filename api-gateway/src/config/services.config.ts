@@ -19,12 +19,13 @@ export class ServicesConfig {
         requiresAuth: false,
       },
       {
-        prefix: "/api/v1/user/users",
+        prefix: "/api/v1/user/profile",
         target: this.configService.get("USER_SERVICE_URL"),
         requiresAuth: true,
       },
+
       {
-        prefix: "/api/v1/event/events",
+        prefix: "/api/v1/event",
         target: this.configService.get("EVENT_SERVICE_URL"),
         requiresAuth: false,
       },
