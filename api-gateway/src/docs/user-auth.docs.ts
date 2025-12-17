@@ -409,7 +409,7 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         "application/json": {
           schema: {
             type: "object",
-            required: ["email", "otp", "newPassword"],
+            required: ["email", "otp", "newPassword", "confirmPassword"],
             properties: {
               email: {
                 type: "string",
