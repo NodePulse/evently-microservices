@@ -60,10 +60,6 @@ const createProxy = (target: string, pathRewrite?: Record<string, string>) => {
 
           console.log("\x1b[32m%s\x1b[0m", "Proxy Response:", downstreamData);
 
-          // Debug: Log user agent for encryption detection
-          const userAgent = (req as any).headers?.["user-agent"] || "unknown";
-          console.log("\x1b[33m%s\x1b[0m", `User-Agent: ${userAgent}`);
-
           const builder = responseBuilder
             .createBuilder(requestId, (req as Request).startTime, req)
             .status(statusCode)

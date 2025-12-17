@@ -83,16 +83,26 @@ export class ResponseBuilderService {
    * These tools should receive unencrypted responses for debugging
    */
   private isApiTestingTool(req?: any): boolean {
-    if (!req || !req.headers) return false;
+    if (!req || !req.headers) {
+      // If no headers available, assume it's an API testing tool
+      // This handles cases where headers aren't properly forwarded
+      return true;
+    }
 
     const userAgent = (req.headers["user-agent"] || "").toLowerCase();
     const customHeader = req.headers["x-skip-encryption"];
+    const referer = (
+      req.headers["referer"] ||
+      req.headers["referrer"] ||
+      ""
+    ).toLowerCase();
+    const origin = (req.headers["origin"] || "").toLowerCase();
+    const accept = (req.headers["accept"] || "").toLowerCase();
 
-    // Check for common API testing tools
+    // Check for common API testing tools in User-Agent
     const testingTools = [
       "insomnia",
       "postman",
-      "swagger",
       "curl",
       "httpie",
       "thunder client",
@@ -102,6 +112,29 @@ export class ResponseBuilderService {
 
     // Skip encryption if custom header is present
     if (customHeader === "true") {
+      return true;
+    }
+
+    // If User-Agent is empty or very short, likely an API tool
+    if (!userAgent || userAgent.length < 10) {
+      return true;
+    }
+
+    // Check if request is from Swagger UI or API testing tools
+    // Swagger UI makes requests from the same origin with specific patterns
+    if (referer.includes("/api-docs") || referer.includes("swagger")) {
+      return true;
+    }
+
+    // If origin matches the server (same-origin) and it's not likely a regular browser request
+    // This catches Swagger UI which runs on the same server
+    if (
+      origin &&
+      accept.includes("application/json") &&
+      !accept.includes("text/html")
+    ) {
+      // This is likely an API testing request (Swagger UI, tools, etc.)
+      // Regular browser navigation includes text/html
       return true;
     }
 
@@ -117,16 +150,6 @@ export class ResponseBuilderService {
     // Determine if encryption should be skipped for this request
     const skipEncryption = this.isApiTestingTool(req);
     const shouldEncrypt = this.enableEncryption && !skipEncryption;
-
-    // Debug logging
-    if (this.enableEncryption) {
-      const userAgent = req?.headers?.["user-agent"] || "unknown";
-      logger.info(
-        `Encryption decision: ${
-          shouldEncrypt ? "ENCRYPT" : "SKIP"
-        } | User-Agent: ${userAgent.substring(0, 50)}`
-      );
-    }
 
     return new ResponseBuilder(
       requestId,
