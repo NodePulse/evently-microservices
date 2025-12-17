@@ -68,7 +68,7 @@ app.use(
 // Health Check
 app.get("/health", (req: any, res) => {
   const response = responseBuilder
-    .createBuilder(req.id, req.startTime)
+    .createBuilder(req.id, req.startTime, req)
     .status(200)
     .withMessage("API Gateway is running")
     .withData({

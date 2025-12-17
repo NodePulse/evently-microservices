@@ -78,14 +78,50 @@ export class ResponseBuilderService {
     }
   }
 
+  /**
+   * Detect if request is from API testing tool (Insomnia, Postman, Swagger, etc.)
+   * These tools should receive unencrypted responses for debugging
+   */
+  private isApiTestingTool(req?: any): boolean {
+    if (!req || !req.headers) return false;
+
+    const userAgent = (req.headers["user-agent"] || "").toLowerCase();
+    const customHeader = req.headers["x-skip-encryption"];
+
+    // Check for common API testing tools
+    const testingTools = [
+      "insomnia",
+      "postman",
+      "swagger",
+      "curl",
+      "httpie",
+      "thunder client",
+      "rest client",
+      "paw",
+    ];
+
+    // Skip encryption if custom header is present
+    if (customHeader === "true") {
+      return true;
+    }
+
+    // Check user agent for testing tools
+    return testingTools.some((tool) => userAgent.includes(tool));
+  }
+
   createBuilder(
     requestId: string,
-    startTime?: [number, number]
+    startTime?: [number, number],
+    req?: any // Optional request object to detect testing tools
   ): ResponseBuilder {
+    // Determine if encryption should be skipped for this request
+    const skipEncryption = this.isApiTestingTool(req);
+    const shouldEncrypt = this.enableEncryption && !skipEncryption;
+
     return new ResponseBuilder(
       requestId,
       startTime,
-      this.enableEncryption,
+      shouldEncrypt,
       this.encryptionSecret,
       this.encryptionSalt,
       this.encryptionAlgorithm
