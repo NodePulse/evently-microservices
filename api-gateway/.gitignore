@@ -1,6 +1,11 @@
 node_modules/
 dist/
+# Environment files (keep only .example files)
 .env
+.env.local
+.env.*.local
+.env.dev
+.env.prod
 *.log
 .DS_Store
 logs

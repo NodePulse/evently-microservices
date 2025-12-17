@@ -18,6 +18,15 @@ const createProxy = (target: string, pathRewrite?: Record<string, string>) => {
       // Add gateway secret
       proxyReq.setHeader("x-gateway-secret", config.gatewaySecret);
 
+      // Forward user information if authenticated
+      const expressReq = req as any;
+      if (expressReq.user) {
+        proxyReq.setHeader("x-user-id", expressReq.user.userId);
+        proxyReq.setHeader("x-user-email", expressReq.user.email);
+        proxyReq.setHeader("x-user-username", expressReq.user.username);
+        proxyReq.setHeader("x-user-role", expressReq.user.role);
+      }
+
       // Explicitly set Host header to match target
       const targetUrl = new URL(target);
       proxyReq.setHeader("host", targetUrl.host);
@@ -28,7 +37,6 @@ const createProxy = (target: string, pathRewrite?: Record<string, string>) => {
       );
 
       // Restream parsed body if present (needed because of express.json() in app.ts)
-      const expressReq = req as Request;
       if (expressReq.body && Object.keys(expressReq.body).length > 0) {
         const bodyData = JSON.stringify(expressReq.body);
         proxyReq.setHeader("Content-Type", "application/json");

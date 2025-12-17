@@ -2,10 +2,12 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import cookieParser from "cookie-parser";
 import { setupProxies } from "./middleware/proxy";
 import { loginRateLimiter } from "./middleware/rateLimit";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
+import { extractUserFromJWT } from "./middleware/auth.middleware";
 
 const app = express();
 
@@ -21,12 +23,19 @@ app.use((req, res, next) => {
   req.id = uuidv4();
   next();
 });
+
+// Cookie parser MUST come before auth middleware
+app.use(cookieParser());
+
 app.use(
   cors({
     origin: ["http://localhost:3000"],
     credentials: true,
   })
 );
+
+// JWT extraction - extracts user info from cookie if present
+app.use(extractUserFromJWT);
 app.use(
   morgan((tokens: any, req: any, res: any) => {
     const method = tokens.method(req, res);
