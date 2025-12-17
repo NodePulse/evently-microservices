@@ -5,27 +5,21 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import { connectDatabase } from "./config/database";
-import * as eventController from "./controller/eventController";
+import eventRoutes from "./routes/event.routes";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8002;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Connect to MongoDB
 connectDatabase();
 
-// Health check
-app.get("/health", eventController.getHealth);
-
-// Event routes
-app.get("/count", eventController.getEventsCount);
-app.get("/events", eventController.getAllEvents);
-app.get("/events/:id", eventController.getEventById);
-app.post("/events", eventController.createEvent);
-app.get("/my-events", eventController.getMyEvents);
+// Routes
+app.use("/", eventRoutes);
 
 app.listen(PORT, () => {
   console.log(`🎉 Event Service running on port ${PORT}`);

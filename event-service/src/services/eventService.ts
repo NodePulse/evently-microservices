@@ -20,7 +20,7 @@ const CreateEventSchema = z
     endDate: z.string().datetime(),
     startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
     endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-    price: z.number().min(0),
+    price: z.coerce.number().min(0),
     currency: z.enum([
       "USD",
       "EUR",
@@ -52,19 +52,27 @@ const CreateEventSchema = z
       "Networking",
     ]),
     eventType: z.enum(["offline", "online", "hybrid"]),
-    maxAttendees: z.number().int().min(1).max(50).optional(),
+    maxAttendees: z.coerce.number().int().min(1).max(50).optional(),
     tags: z.string().max(200).optional(),
     eventUrl: z.string().url().optional(),
     contactEmail: z.string().email().optional(),
     contactPhone: z.string().optional(),
     requirements: z.string().max(500).optional(),
     refundPolicy: z.string().max(500).optional(),
-    ageRestriction: z.number().int().min(0).max(99).optional(),
+    ageRestriction: z.coerce.number().int().min(0).max(99).optional(),
     registrationDeadline: z.string().datetime().optional(),
-    allowWaitlist: z.boolean().optional(),
-    sendReminders: z.boolean().optional(),
-    allowGuestRegistration: z.boolean().optional(),
-    isPublished: z.boolean().optional(),
+    allowWaitlist: z
+      .preprocess((val) => val === "true" || val === true, z.boolean())
+      .optional(),
+    sendReminders: z
+      .preprocess((val) => val === "true" || val === true, z.boolean())
+      .optional(),
+    allowGuestRegistration: z
+      .preprocess((val) => val === "true" || val === true, z.boolean())
+      .optional(),
+    isPublished: z
+      .preprocess((val) => val === "true" || val === true, z.boolean())
+      .optional(),
     imageUrl: z.string().url().optional(),
     videoUrl: z.string().url().optional(),
   })
@@ -225,6 +233,49 @@ export const getEventsCount = async (
     return {
       status: 500,
       message: "Error fetching event count",
+      data: null,
+    };
+  }
+};
+
+/**
+ * Get event counts grouped by user (organizer)
+ */
+export const getEventsGroupedByUser = async (
+  requestId: string,
+  headers?: Record<string, any>
+): Promise<any> => {
+  try {
+    const stats = await Event.aggregate([
+      {
+        $group: {
+          _id: "$organizerId",
+          organized_events: { $sum: 1 },
+          total_attendees: { $sum: "$maxAttendees" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          userId: "$_id",
+          organized_events: 1,
+          attended_events: { $literal: 0 }, // Placeholder as we don't track attendance yet
+          total_attendees: 1,
+        },
+      },
+    ]);
+
+    logger.info("Events grouped by user fetched successfully", { requestId });
+    return {
+      status: 200,
+      message: "Events grouped by user fetched successfully",
+      data: stats,
+    };
+  } catch (error) {
+    logger.error("Error fetching events grouped by user", { requestId, error });
+    return {
+      status: 500,
+      message: "Failed to fetch events grouped by user",
       data: null,
     };
   }

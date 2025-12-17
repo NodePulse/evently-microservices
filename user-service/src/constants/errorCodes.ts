@@ -1,19 +1,92 @@
-export const ERROR_CODES = {
-  INVALID_INPUT: 'INVALID_INPUT',
-  USER_EXISTS: 'USER_EXISTS',
-  USERNAME_EXISTS: 'USERNAME_EXISTS',
-  REGISTRATION_ERROR: 'REGISTRATION_ERROR',
-  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
-  LOGIN_ERROR: 'LOGIN_ERROR',
-  LOGOUT_ERROR: 'LOGOUT_ERROR',
-  NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
-  USER_NOT_FOUND: 'USER_NOT_FOUND',
-  INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
-  INVALID_OLD_PASSWORD: 'INVALID_OLD_PASSWORD',
-  CHANGE_PASSWORD_ERROR: 'CHANGE_PASSWORD_ERROR',
-  OTP_SEND_ERROR: 'OTP_SEND_ERROR',
-  INVALID_OTP: 'INVALID_OTP',
-  OTP_EXPIRED: 'OTP_EXPIRED',
-  INVALID_REFRESH_TOKEN: 'INVALID_REFRESH_TOKEN',
-  REFRESH_TOKEN_ERROR: 'REFRESH_TOKEN_ERROR',
+export const ERROR_CODES: Record<string, ErrorCodes> = {
+  VALIDATION_ERROR: {
+    name: 'VALIDATION_ERROR',
+    message: 'Validation failed',
+    code: 422,
+  },
+  INVALID_INPUT: {
+    name: 'INVALID_INPUT',
+    message: 'Invalid input provided!',
+    code: 422,
+  },
+  USER_EXISTS: {
+    name: 'USER_EXISTS',
+    message: 'User already exists!',
+    code: 409,
+  },
+  USERNAME_EXISTS: {
+    name: 'USERNAME_EXISTS',
+    message: 'Username already exists!',
+    code: 409,
+  },
+  REGISTRATION_ERROR: {
+    name: 'REGISTRATION_ERROR',
+    message: 'Registration failed!',
+    code: 500,
+  },
+  INVALID_CREDENTIALS: {
+    name: 'INVALID_CREDENTIALS',
+    message: 'Invalid credentials!',
+    code: 401,
+  },
+  LOGIN_ERROR: {
+    name: 'LOGIN_ERROR',
+    message: 'Login failed!',
+    code: 500,
+  },
+  LOGOUT_ERROR: {
+    name: 'LOGOUT_ERROR',
+    message: 'Logout failed!',
+    code: 500,
+  },
+  NOT_AUTHENTICATED: {
+    name: 'NOT_AUTHENTICATED',
+    message: 'Not authenticated!',
+    code: 401,
+  },
+  USER_NOT_FOUND: {
+    name: 'USER_NOT_FOUND',
+    message: 'User not found!',
+    code: 404,
+  },
+  INTERNAL_SERVER_ERROR: {
+    name: 'INTERNAL_SERVER_ERROR',
+    message: 'Internal server error!',
+    code: 500,
+  },
+  INVALID_OLD_PASSWORD: {
+    name: 'INVALID_OLD_PASSWORD',
+    message: 'Invalid old password!',
+    code: 401,
+  },
+  CHANGE_PASSWORD_ERROR: {
+    name: 'CHANGE_PASSWORD_ERROR',
+    message: 'Change password failed!',
+    code: 500,
+  },
+  OTP_SEND_ERROR: {
+    name: 'OTP_SEND_ERROR',
+    message: 'OTP send failed!',
+    code: 500,
+  },
+  INVALID_OTP: {
+    name: 'INVALID_OTP',
+    message: 'Invalid OTP!',
+    code: 401,
+  },
+  OTP_EXPIRED: {
+    name: 'OTP_EXPIRED',
+    message: 'OTP expired!',
+    code: 401,
+  },
+  INVALID_REFRESH_TOKEN: {
+    name: 'INVALID_REFRESH_TOKEN',
+    message: 'Invalid refresh token!',
+    code: 401,
+  },
+  REFRESH_TOKEN_ERROR: {
+    name: 'REFRESH_TOKEN_ERROR',
+    message: 'Refresh token error!',
+    code: 500,
+  },
 };
