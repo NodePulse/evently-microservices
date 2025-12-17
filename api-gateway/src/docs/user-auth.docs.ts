@@ -16,7 +16,7 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         "application/json": {
           schema: {
             type: "object",
-            required: ["email", "username", "password", "name", "gender"],
+            required: ["email", "username", "password", "name", "gender", "confirmPassword"],
             properties: {
               email: {
                 type: "string",
@@ -37,8 +37,8 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
                 type: "string",
                 format: "password",
                 minLength: 8,
-                maxLength: 100,
-                description: "User password (8-100 characters)",
+                maxLength: 20,
+                description: "User password (8-20 characters)",
                 example: "SecurePass123!",
               },
               name: {
@@ -52,6 +52,14 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
                 enum: ["Male", "Female", "Other"],
                 description: "User's gender (optional)",
                 example: "Male",
+              },
+              confirmPassword: {
+                type: "string",
+                format: "password",
+                minLength: 8,
+                maxLength: 20,
+                description: "Confirm user password (8-20 characters)",
+                example: "SecurePass123!",
               },
             },
           },
@@ -226,11 +234,13 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         "application/json": {
           schema: {
             type: "object",
-            required: ["oldPassword", "newPassword"],
+            required: ["oldPassword", "newPassword", "confirmPassword"],
             properties: {
               oldPassword: {
                 type: "string",
                 format: "password",
+                minLength: 8,
+                maxLength: 20,
                 description: "Current password",
                 example: "OldPassword123!",
               },
@@ -238,7 +248,16 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
                 type: "string",
                 format: "password",
                 minLength: 8,
-                description: "New password (minimum 8 characters)",
+                maxLength: 20,
+                description: "New password (8-20 characters)",
+                example: "NewPassword123!",
+              },
+              confirmPassword: {
+                type: "string",
+                format: "password",
+                minLength: 8,
+                maxLength: 20,
+                description: "Confirm new password (8-20 characters)",
                 example: "NewPassword123!",
               },
             },
@@ -252,20 +271,24 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
       example: null,
     },
     successExample: {
-      status: 200,
-      message: "Password changed successfully",
-      data: null,
-      meta: {
-        requestId: "123e4567-e89b-12d3-a456-426614174000",
-        timestamp: "2025-12-16T07:19:20.000Z",
-        processingTime: "120ms",
+      success: true,
+      status: {
+        code: 200,
+        description: "OK",
       },
-      request: {
+      message: "Password changed successfully",
+      timestamp: "2025-12-16T07:19:20.000Z",
+      responseTimeMs: 14,
+      requestId: "123e4567-e89b-12d3-a456-426614174000",
+      locale: "en-US",
+      data: null,
+      error: null,
+      requestContext: {
         path: "/api/v1/user/auth/change-password",
         method: "POST",
       },
     },
-    errorCodes: ["400", "401", "500"],
+    errorCodes: ["401", "422", "500", "404"],
     security: [{ BearerAuth: [] }],
   });
 
@@ -299,20 +322,24 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
       example: null,
     },
     successExample: {
-      status: 200,
-      message: "OTP sent successfully",
-      data: null,
-      meta: {
-        requestId: "123e4567-e89b-12d3-a456-426614174000",
-        timestamp: "2025-12-16T07:19:20.000Z",
-        processingTime: "500ms",
+      success: true,
+      status: {
+        code: 200,
+        description: "OK",
       },
-      request: {
+      message: "OTP sent successfully",
+      timestamp: "2025-12-16T07:19:20.000Z",
+      responseTimeMs: 14,
+      requestId: "123e4567-e89b-12d3-a456-426614174000",
+      locale: "en-US",
+      data: null,
+      error: null,
+      requestContext: {
         path: "/api/v1/user/auth/forgot-password",
         method: "POST",
       },
     },
-    errorCodes: ["400", "500"],
+    errorCodes: ["422", "500"],
   });
 
   // Verify OTP
@@ -338,7 +365,7 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
                 type: "string",
                 pattern: "^[0-9]{6}$",
                 description: "6-digit OTP code",
-                example: "123456",
+                example: "111111",
               },
             },
           },
@@ -351,20 +378,24 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
       example: null,
     },
     successExample: {
-      status: 200,
-      message: "OTP verified successfully",
-      data: null,
-      meta: {
-        requestId: "123e4567-e89b-12d3-a456-426614174000",
-        timestamp: "2025-12-16T07:19:20.000Z",
-        processingTime: "50ms",
+      success: true,
+      status: {
+        code: 200,
+        description: "OK",
       },
-      request: {
+      message: "OTP verified successfully",
+      timestamp: "2025-12-16T07:19:20.000Z",
+      responseTimeMs: 14,
+      requestId: "123e4567-e89b-12d3-a456-426614174000",
+      locale: "en-US",
+      data: null,
+      error: null,
+      requestContext: {
         path: "/api/v1/user/auth/verify-otp",
         method: "POST",
       },
     },
-    errorCodes: ["400", "401", "500"],
+    errorCodes: ["410", "500"],
   });
 
   // Change Forgot Password
@@ -390,13 +421,22 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
                 type: "string",
                 pattern: "^[0-9]{6}$",
                 description: "6-digit OTP code",
-                example: "123456",
+                example: "111111",
               },
               newPassword: {
                 type: "string",
                 format: "password",
                 minLength: 8,
-                description: "New password (minimum 8 characters)",
+                maxLength: 20,
+                description: "New password (8-20 characters)",
+                example: "NewPassword123!",
+              },
+              confirmPassword: {
+                type: "string",
+                format: "password",
+                minLength: 8,
+                maxLength: 20,
+                description: "Confirm new password (8-20 characters)",
                 example: "NewPassword123!",
               },
             },
@@ -410,20 +450,24 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
       example: null,
     },
     successExample: {
-      status: 200,
-      message: "Password changed successfully",
-      data: null,
-      meta: {
-        requestId: "123e4567-e89b-12d3-a456-426614174000",
-        timestamp: "2025-12-16T07:19:20.000Z",
-        processingTime: "150ms",
+      success: true,
+      status: {
+        code: 200,
+        description: "OK",
       },
-      request: {
+      message: "Password changed successfully",
+      timestamp: "2025-12-16T07:19:20.000Z",
+      responseTimeMs: 14,
+      requestId: "123e4567-e89b-12d3-a456-426614174000",
+      locale: "en-US",
+      data: null,
+      error: null,
+      requestContext: {
         path: "/api/v1/user/auth/change-forgot-password",
         method: "POST",
       },
     },
-    errorCodes: ["400", "401", "500"],
+    errorCodes: ["422", "410", "404", "500"],
   });
 
   return builder;

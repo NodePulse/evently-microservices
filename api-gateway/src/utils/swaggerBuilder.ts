@@ -28,6 +28,18 @@ const internalserver = {
     message: "Logout failed!",
     code: "LOGOUT_ERROR",
   },
+  "change-password": {
+    message: "Change password failed!",
+    code: "CHANGE_PASSWORD_ERROR",
+  },
+  "forgot-password": {
+    message: "OTP send failed!",
+    code: "OTP_SEND_ERROR",
+  },
+  "change-forgot-password": {
+    message: "Change password failed!",
+    code: "CHANGE_PASSWORD_ERROR",
+  },
 };
 
 const unauthorized = {
@@ -38,6 +50,36 @@ const unauthorized = {
   logout: {
     message: "Not authenticated!",
     code: "NOT_AUTHENTICATED",
+  },
+  "change-password": {
+    message: "Not authenticated!",
+    code: "NOT_AUTHENTICATED",
+  },
+  "forgot-password": {
+    message: "Not authenticated!",
+    code: "NOT_AUTHENTICATED",
+  },
+};
+
+const notFound = {
+  "change-password": {
+    message: "User not found!",
+    code: "USER_NOT_FOUND",
+  },
+  "change-forgot-password": {
+    message: "User not found!",
+    code: "USER_NOT_FOUND",
+  },
+};
+
+const gone = {
+  "verify-otp": {
+    message: "OTP expired!",
+    code: "OTP_EXPIRED",
+  },
+  "change-forgot-password": {
+    message: "OTP expired!",
+    code: "OTP_EXPIRED",
   },
 };
 
@@ -58,6 +100,26 @@ const unauthorizedErrorMessage = (path: string) => {
   return {
     message: errorInfo?.message || "Unauthorized",
     code: errorInfo?.code || "UNAUTHORIZED",
+  };
+};
+
+const notFoundErrorMessage = (path: string) => {
+  const mainPath = path.split("/").pop() || "";
+  const errorInfo = notFound[mainPath as keyof typeof notFound];
+
+  return {
+    message: errorInfo?.message || "Not found",
+    code: errorInfo?.code || "NOT_FOUND",
+  };
+};
+
+const goneErrorMessage = (path: string) => {
+  const mainPath = path.split("/").pop() || "";
+  const errorInfo = gone[mainPath as keyof typeof gone];
+
+  return {
+    message: errorInfo?.message || "Gone",
+    code: errorInfo?.code || "GONE",
   };
 };
 
@@ -177,14 +239,14 @@ export class SwaggerBuilder {
           example:
             statusCode >= 400
               ? {
-                  code: "",
+                code: "",
+                message: "",
+                details: {
+                  field: "",
                   message: "",
-                  details: {
-                    field: "",
-                    message: "",
-                    nullable: true,
-                  },
-                }
+                  nullable: true,
+                },
+              }
               : null,
         },
         requestContext: {
@@ -267,12 +329,8 @@ export class SwaggerBuilder {
                 message: "Validation failed!",
                 details: [
                   {
-                    field: "email",
-                    message: "Invalid email address",
-                  },
-                  {
-                    field: "password",
-                    message: "Password must be at least 8 characters",
+                    field: "field name",
+                    message: "field validation message",
                   },
                 ],
               },
@@ -334,7 +392,7 @@ export class SwaggerBuilder {
                 type: "object",
                 properties: {
                   code: { type: "string", example: "NOT_FOUND" },
-                  message: { type: "string", example: "Resource not found" },
+                  message: { type: "string", example: "Not found!" },
                 },
               },
               404
@@ -343,17 +401,17 @@ export class SwaggerBuilder {
               success: false,
               status: {
                 code: 404,
-                description: "Not Found",
+                description: "Not found!",
               },
-              message: "Resource not found",
+              message: notFoundErrorMessage(path).message,
               timestamp: "2025-12-16T07:19:20.000Z",
               responseTimeMs: 14,
               requestId: "123e4567-e89b-12d3-a456-426614174000",
               locale: "en-US",
               data: null,
               error: {
-                message: "Resource not found",
-                code: "NOT_FOUND",
+                message: notFoundErrorMessage(path).message,
+                code: notFoundErrorMessage(path).code,
               },
               requestContext: {
                 path: path,
@@ -373,7 +431,7 @@ export class SwaggerBuilder {
                 properties: {
                   message: {
                     type: "string",
-                    example: "Internal server error",
+                    example: "Internal server error!",
                   },
                   code: { type: "string", example: "INTERNAL_ERROR" },
                 },
@@ -442,6 +500,44 @@ export class SwaggerBuilder {
           },
         },
       },
+      GoneError: {
+        description: "Gone Error",
+        content: {
+          "application/json": {
+            schema: SwaggerBuilder.getResponseWrapper(
+              {
+                type: "object",
+                properties: {
+                  message: { type: "string", example: "Expired!" },
+                  code: { type: "string", example: "GONE_ERROR" },
+                },
+              },
+              410
+            ),
+            example: {
+              success: false,
+              status: {
+                code: 410,
+                description: "Gone Error",
+              },
+              message: goneErrorMessage(path).message,
+              timestamp: "2025-12-16T07:19:20.000Z",
+              responseTimeMs: 14,
+              requestId: "123e4567-e89b-12d3-a456-426614174000",
+              locale: "en-US",
+              data: null,
+              error: {
+                message: goneErrorMessage(path).message,
+                code: goneErrorMessage(path).code,
+              },
+              requestContext: {
+                path: path,
+                method: method,
+              },
+            },
+          },
+        },
+      },
     };
   }
 
@@ -484,6 +580,7 @@ export class SwaggerBuilder {
         "422": "ValidationError",
         "401": "Unauthorized",
         "404": "NotFound",
+        "410": "GoneError",
         "500": "InternalServerError",
         "409": "ConflictError",
       }[code];

@@ -18,9 +18,13 @@ export const registerSchema = z.object({
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
-    .max(100, 'Password must be at most 100 characters'),
-  name: z.string().min(1, 'Name is required').optional(),
-  gender: z.enum(['Male', 'Female', 'Other']).optional(),
+    .max(20, 'Password must be at most 20 characters'),
+  name: z.string().min(3, 'Name is required'),
+  gender: z.enum(['Male', 'Female', 'Other']),
+  confirmPassword: z
+    .string()
+    .min(8, 'Confirm password is required')
+    .max(20, 'Confirm password must be at most 20 characters'),
 });
 
 export type RegisterDTO = z.infer<typeof registerSchema>;
@@ -28,18 +32,28 @@ export type RegisterDTO = z.infer<typeof registerSchema>;
 // Login DTO
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
+  password: z
+    .string()
+    .min(8, 'Password is required')
+    .max(20, 'Password must be at most 20 characters'),
 });
 
 export type LoginDTO = z.infer<typeof loginSchema>;
 
 // Change Password DTO
 export const changePasswordSchema = z.object({
-  oldPassword: z.string().min(1, 'Old password is required'),
+  oldPassword: z
+    .string()
+    .min(8, 'Old password is required')
+    .max(20, 'Old password must be at most 20 characters'),
   newPassword: z
     .string()
     .min(8, 'New password must be at least 8 characters')
-    .max(100, 'New password must be at most 100 characters'),
+    .max(20, 'New password must be at most 20 characters'),
+  confirmPassword: z
+    .string()
+    .min(8, 'Confirm password is required')
+    .max(20, 'Confirm password must be at most 20 characters'),
 });
 
 export type ChangePasswordDTO = z.infer<typeof changePasswordSchema>;
@@ -72,7 +86,11 @@ export const changeForgotPasswordSchema = z.object({
   newPassword: z
     .string()
     .min(8, 'New password must be at least 8 characters')
-    .max(100, 'New password must be at most 100 characters'),
+    .max(20, 'New password must be at most 20 characters'),
+  confirmPassword: z
+    .string()
+    .min(8, 'Confirm password is required')
+    .max(20, 'Confirm password must be at most 20 characters'),
 });
 
 export type ChangeForgotPasswordDTO = z.infer<

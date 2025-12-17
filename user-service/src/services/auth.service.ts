@@ -48,7 +48,8 @@ export const AuthService = {
 
   register: async (requestId: string, registerDto: any) => {
     try {
-      const { email, username, password, gender, name } = registerDto;
+      const { email, username, password, gender, name, confirmPassword } =
+        registerDto;
 
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
@@ -60,6 +61,10 @@ export const AuthService = {
       });
       if (existingUsername) {
         throw new AppError(ERROR_CODES.USERNAME_EXISTS);
+      }
+
+      if (password !== confirmPassword) {
+        throw new AppError(ERROR_CODES.PASSWORD_MISMATCH);
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -218,15 +223,28 @@ export const AuthService = {
         throw new AppError(ERROR_CODES.NOT_AUTHENTICATED);
       }
 
-      const { oldPassword, newPassword } = changePasswordDto;
+      const { oldPassword, newPassword, confirmPassword } = changePasswordDto;
+
+      if (newPassword !== confirmPassword) {
+        throw new AppError(ERROR_CODES.PASSWORD_MISMATCH);
+      }
+
+      if (oldPassword === newPassword) {
+        throw new AppError(ERROR_CODES.PASSWORD_SAME);
+      }
 
       const dbUser = await prisma.user.findUnique({
         where: { id: userId },
         select: { passwordHash: true },
       });
 
-      if (!dbUser || !dbUser.passwordHash) {
+      if (!dbUser) {
         throw new AppError(ERROR_CODES.USER_NOT_FOUND);
+      }
+
+      // case handled
+      if (!dbUser.passwordHash) {
+        throw new AppError(ERROR_CODES.INVALID_OLD_PASSWORD);
       }
 
       const isMatch = await bcrypt.compare(oldPassword, dbUser.passwordHash);
@@ -256,10 +274,10 @@ export const AuthService = {
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user) {
-        return new AppResponse(200, 'If email exists, OTP sent');
+        return new AppResponse(200, 'OTP sent successfully');
       }
 
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = config.nodeEnv === "development" ? "111111" : Math.floor(100000 + Math.random() * 900000).toString();
       const hashedOTP = await bcrypt.hash(otp, 10);
 
       await prisma.$transaction([
@@ -298,9 +316,17 @@ export const AuthService = {
   },
 
   verifyOTP: async (requestId: string, verifyOtpDto: any) => {
-    const { email, otp } = verifyOtpDto;
-    await AuthService.verifyOtpHelper(email, otp);
-    return new AppResponse(200, 'OTP verified successfully');
+    try {
+      const { email, otp } = verifyOtpDto;
+      await AuthService.verifyOtpHelper(email, otp);
+      return new AppResponse(200, 'OTP verified successfully');
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      logger.error(`Verify OTP error: ${error}`);
+      throw new AppError(ERROR_CODES.OTP_VERIFY_ERROR);
+    }
   },
 
   changeForgotPassword: async (
@@ -308,7 +334,18 @@ export const AuthService = {
     changeForgotPasswordDto: any,
   ) => {
     try {
-      const { email, otp, newPassword } = changeForgotPasswordDto;
+      const { email, otp, newPassword, confirmPassword } =
+        changeForgotPasswordDto;
+
+      if (newPassword !== confirmPassword) {
+        throw new AppError(ERROR_CODES.PASSWORD_MISMATCH);
+      }
+
+      // Verify user exists
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        throw new AppError(ERROR_CODES.USER_NOT_FOUND);
+      }
 
       const storedOtp = await AuthService.verifyOtpHelper(email, otp);
       const hashedPassword = await bcrypt.hash(newPassword, 10);

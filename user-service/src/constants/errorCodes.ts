@@ -72,21 +72,36 @@ export const ERROR_CODES: Record<string, ErrorCodes> = {
   INVALID_OTP: {
     name: 'INVALID_OTP',
     message: 'Invalid OTP!',
-    code: 401,
+    code: 410,
   },
   OTP_EXPIRED: {
     name: 'OTP_EXPIRED',
     message: 'OTP expired!',
-    code: 401,
+    code: 410,
   },
   INVALID_REFRESH_TOKEN: {
     name: 'INVALID_REFRESH_TOKEN',
     message: 'Invalid refresh token!',
-    code: 401,
+    code: 410,
   },
   REFRESH_TOKEN_ERROR: {
     name: 'REFRESH_TOKEN_ERROR',
     message: 'Refresh token error!',
+    code: 500,
+  },
+  PASSWORD_MISMATCH: {
+    name: 'PASSWORD_MISMATCH',
+    message: 'Password and confirm password should be same!',
+    code: 422,
+  },
+  PASSWORD_SAME: {
+    name: 'PASSWORD_SAME',
+    message: 'New password should be different from old password!',
+    code: 422,
+  },
+  OTP_VERIFY_ERROR: {
+    name: 'OTP_VERIFY_ERROR',
+    message: 'OTP verify failed!',
     code: 500,
   },
 };
