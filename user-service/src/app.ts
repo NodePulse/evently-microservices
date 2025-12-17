@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes';
 import profileRoutes from './routes/profile.routes';
 import { errorHandler } from './middleware/error.middleware';
+import { validateGatewayRequest } from './middleware/gateway.middleware';
 
 const app = express();
 
@@ -16,6 +17,9 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Gateway validation - Only allow requests from API Gateway
+app.use(validateGatewayRequest);
 
 // ... (existing imports)
 

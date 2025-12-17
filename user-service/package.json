@@ -5,7 +5,10 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "nodemon src/server.ts",
+    "dev": "dotenv -e .env.dev nodemon src/server.ts",
+    "dev:prod": "dotenv -e .env.prod nodemon src/server.ts",
+    "start:dev": "dotenv -e .env.dev node dist/server.js",
+    "start:prod": "dotenv -e .env.prod node dist/server.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "prisma:generate": "prisma generate"
   },
@@ -46,6 +49,7 @@
     "@types/passport-google-oauth20": "^2.0.14",
     "@types/pg": "^8.10.9",
     "@types/uuid": "^9.0.7",
+    "dotenv-cli": "^7.4.2",
     "eslint": "^8.56.0",
     "nodemon": "^3.0.2",
     "prisma": "^7.0.0",
