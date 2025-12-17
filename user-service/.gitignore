@@ -404,3 +404,4 @@ dist
 .serverless/**/*.zip
 
 /generated/prisma
+logs

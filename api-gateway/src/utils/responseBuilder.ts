@@ -118,6 +118,16 @@ export class ResponseBuilderService {
     const skipEncryption = this.isApiTestingTool(req);
     const shouldEncrypt = this.enableEncryption && !skipEncryption;
 
+    // Debug logging
+    if (this.enableEncryption) {
+      const userAgent = req?.headers?.["user-agent"] || "unknown";
+      logger.info(
+        `Encryption decision: ${
+          shouldEncrypt ? "ENCRYPT" : "SKIP"
+        } | User-Agent: ${userAgent.substring(0, 50)}`
+      );
+    }
+
     return new ResponseBuilder(
       requestId,
       startTime,
