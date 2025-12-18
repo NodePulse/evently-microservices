@@ -16,7 +16,14 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         "application/json": {
           schema: {
             type: "object",
-            required: ["email", "username", "password", "name", "gender", "confirmPassword"],
+            required: [
+              "email",
+              "username",
+              "password",
+              "name",
+              "gender",
+              "confirmPassword",
+            ],
             properties: {
               email: {
                 type: "string",
@@ -188,7 +195,7 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         method: "POST",
       },
     },
-    errorCodes: ["422", "401", "500"],
+    errorCodes: ["422", "429", "401", "500"],
   });
 
   // Logout
@@ -332,14 +339,16 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
       responseTimeMs: 14,
       requestId: "123e4567-e89b-12d3-a456-426614174000",
       locale: "en-US",
-      data: null,
+      data: {
+        resetSessionId: "123e4567-e89b-12d3-a456-426614174000",
+      },
       error: null,
       requestContext: {
         path: "/api/v1/user/auth/forgot-password",
         method: "POST",
       },
     },
-    errorCodes: ["422", "500"],
+    errorCodes: ["422", "429", "500"],
   });
 
   // Verify OTP
@@ -353,13 +362,14 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         "application/json": {
           schema: {
             type: "object",
-            required: ["email", "otp"],
+            required: ["resetSessionId", "otp"],
             properties: {
-              email: {
+              resetSessionId: {
                 type: "string",
-                format: "email",
-                description: "User email address",
-                example: "user@example.com",
+                format: "uuid",
+                description:
+                  "Password reset session ID received from forgot-password",
+                example: "123e4567-e89b-12d3-a456-426614174000",
               },
               otp: {
                 type: "string",
@@ -395,7 +405,7 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         method: "POST",
       },
     },
-    errorCodes: ["410", "500"],
+    errorCodes: ["410", "422", "429", "500"],
   });
 
   // Change Forgot Password
@@ -409,26 +419,19 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         "application/json": {
           schema: {
             type: "object",
-            required: ["email", "otp", "newPassword", "confirmPassword"],
+            required: ["resetToken", "newPassword", "confirmPassword"],
             properties: {
-              email: {
+              resetToken: {
                 type: "string",
-                format: "email",
-                description: "User email address",
-                example: "user@example.com",
-              },
-              otp: {
-                type: "string",
-                pattern: "^[0-9]{6}$",
-                description: "6-digit OTP code",
-                example: "111111",
+                description: "JWT reset token received after OTP verification",
+                example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
               },
               newPassword: {
                 type: "string",
                 format: "password",
                 minLength: 8,
                 maxLength: 20,
-                description: "New password (8-20 characters)",
+                description: "New password",
                 example: "NewPassword123!",
               },
               confirmPassword: {
@@ -436,7 +439,7 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
                 format: "password",
                 minLength: 8,
                 maxLength: 20,
-                description: "Confirm new password (8-20 characters)",
+                description: "Confirm new password",
                 example: "NewPassword123!",
               },
             },
@@ -467,7 +470,7 @@ export const addUserAuthRoutes = (builder: SwaggerBuilder) => {
         method: "POST",
       },
     },
-    errorCodes: ["422", "410", "404", "500"],
+    errorCodes: ["422", "410", "500"],
   });
 
   return builder;

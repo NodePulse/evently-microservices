@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "API Gateway for Evently Microservices",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/favicon.ico dist/favicon.ico",
     "start": "node dist/server.js",
     "dev": "dotenv -e .env.dev nodemon src/server.ts",
     "dev:prod": "dotenv -e .env.prod nodemon src/server.ts",

@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
-import jwt from 'jsonwebtoken';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import prisma from '../prisma';
 import { config } from '../config';
 import { getImageUrl } from '../utils/commonFunction';
@@ -28,22 +28,20 @@ export const AuthService = {
     return jwt.sign(payload, config.jwtAccessSecret, { expiresIn: '24h' });
   },
 
-  verifyOtpHelper: async (email: string, otp: string) => {
-    const storedOtp = await prisma.otp.findFirst({
-      where: { email, expiresAt: { gt: new Date() } },
-      orderBy: { expiresAt: 'desc' },
-    });
-
-    if (!storedOtp) {
-      throw new AppError(ERROR_CODES.OTP_EXPIRED);
+  sendEmail: (to: string, subject: string, text: string) => {
+    try {
+      const transporter = AuthService.getTransporter();
+      if (transporter && config.emailUser) {
+        transporter.sendMail({
+          from: config.emailUser,
+          to,
+          subject,
+          text,
+        });
+      }
+    } catch (error) {
+      logger.error(`Send email error: ${error}`);
     }
-
-    const isOtpValid = await bcrypt.compare(otp, storedOtp.code);
-    if (!isOtpValid) {
-      throw new AppError(ERROR_CODES.INVALID_OTP);
-    }
-
-    return storedOtp;
   },
 
   register: async (requestId: string, registerDto: any) => {
@@ -277,35 +275,29 @@ export const AuthService = {
         return new AppResponse(200, 'OTP sent successfully');
       }
 
-      const otp = config.nodeEnv === "development" ? "111111" : Math.floor(100000 + Math.random() * 900000).toString();
+      const otp =
+        config.nodeEnv === 'development'
+          ? '111111'
+          : Math.floor(100000 + Math.random() * 900000).toString();
       const hashedOTP = await bcrypt.hash(otp, 10);
 
-      await prisma.$transaction([
-        prisma.otp.deleteMany({ where: { email } }),
-        prisma.otp.create({
-          data: {
-            email,
-            code: hashedOTP,
-            expiresAt: new Date(Date.now() + 60 * 1000),
-          },
-        }),
-      ]);
+      const resetSession = await prisma.passwordReset.create({
+        data: {
+          userId: user.id,
+          otpHash: hashedOTP,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+      });
 
-      const transporter = AuthService.getTransporter();
-      if (transporter && config.emailUser) {
-        await transporter.sendMail({
-          from: config.emailUser,
-          to: email,
-          subject: 'Password Reset OTP',
-          text: `Your OTP is ${otp}. It expires in 1 minute.`,
-        });
-      } else {
-        logger.warn(
-          `Email not configured, OTP generated but not sent. OTP: ${otp}`,
-        );
-      }
+      AuthService.sendEmail(
+        user.email,
+        'Password Reset OTP',
+        `Your OTP is ${otp}. It expires in 1 minute.`,
+      );
 
-      return new AppResponse(200, 'OTP sent successfully');
+      return new AppResponse(200, 'OTP sent successfully', {
+        resetSessionId: resetSession.id,
+      });
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -317,9 +309,45 @@ export const AuthService = {
 
   verifyOTP: async (requestId: string, verifyOtpDto: any) => {
     try {
-      const { email, otp } = verifyOtpDto;
-      await AuthService.verifyOtpHelper(email, otp);
-      return new AppResponse(200, 'OTP verified successfully');
+      const { resetSessionId, otp } = verifyOtpDto;
+
+      const resetSession = await prisma.passwordReset.findUnique({
+        where: { id: resetSessionId },
+      });
+
+      if (
+        !resetSession ||
+        resetSession.expiresAt < new Date() ||
+        resetSession.otpUsedAt
+      ) {
+        throw new AppError(ERROR_CODES.EXPIRED_OTP);
+      }
+
+      const isOtpValid = await bcrypt.compare(otp, resetSession.otpHash);
+      if (!isOtpValid) {
+        throw new AppError(ERROR_CODES.INVALID_OTP);
+      }
+
+      await prisma.passwordReset.update({
+        where: { id: resetSession.id },
+        data: { otpUsedAt: new Date() },
+      });
+
+      const resetToken = jwt.sign(
+        {
+          userId: resetSession.userId,
+          purpose: 'password_reset',
+          sessionId: resetSession.id,
+        },
+        config.jwtResetSecret,
+        {
+          expiresIn: '5m',
+        },
+      );
+
+      return new AppResponse(200, 'OTP verified successfully', {
+        resetToken,
+      });
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -334,28 +362,45 @@ export const AuthService = {
     changeForgotPasswordDto: any,
   ) => {
     try {
-      const { email, otp, newPassword, confirmPassword } =
+      const { resetToken, newPassword, confirmPassword } =
         changeForgotPasswordDto;
 
       if (newPassword !== confirmPassword) {
         throw new AppError(ERROR_CODES.PASSWORD_MISMATCH);
       }
 
-      // Verify user exists
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
-        throw new AppError(ERROR_CODES.USER_NOT_FOUND);
+      const payload: JwtPayload = jwt.verify(
+        resetToken,
+        config.jwtResetSecret,
+      ) as JwtPayload;
+      if (!payload) {
+        throw new AppError(ERROR_CODES.INVALID_TOKEN);
       }
 
-      const storedOtp = await AuthService.verifyOtpHelper(email, otp);
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      if (payload.purpose !== 'password_reset') {
+        throw new AppError(ERROR_CODES.INVALID_TOKEN);
+      }
 
-      await prisma.user.update({
-        where: { email },
-        data: { passwordHash: hashedPassword },
+      const resetSession = await prisma.passwordReset.findUnique({
+        where: { id: payload.sessionId },
       });
 
-      await prisma.otp.delete({ where: { id: storedOtp.id } });
+      if (!resetSession || resetSession.tokenUsedAt) {
+        throw new AppError(ERROR_CODES.INVALID_TOKEN);
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      await prisma.$transaction([
+        prisma.passwordReset.update({
+          where: { id: resetSession.id },
+          data: { tokenUsedAt: new Date() },
+        }),
+        prisma.user.update({
+          where: { id: payload.userId },
+          data: { passwordHash: hashedPassword },
+        }),
+      ]);
 
       return new AppResponse(200, 'Password changed successfully');
     } catch (error) {

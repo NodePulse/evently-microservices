@@ -4,7 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import { setupProxies } from "./middleware/proxy";
-import { loginRateLimiter } from "./middleware/rateLimit";
+import { loginRateLimiter, otpRateLimiter } from "./middleware/rateLimit";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
 import { extractUserFromJWT } from "./middleware/auth.middleware";
@@ -13,6 +13,7 @@ const app = express();
 
 import { v4 as uuidv4 } from "uuid";
 import { responseBuilder } from "./utils/responseBuilder";
+import path from "path";
 
 // Middleware
 app.use(helmet());
@@ -84,6 +85,11 @@ app.get("/health", (req: any, res) => {
   res.status(200).json(response);
 });
 
+// Serve favicon
+app.get("/favicon.ico", (req, res) => {
+  res.sendFile(path.join(__dirname, "favicon.ico"));
+});
+
 // Swagger API Documentation
 app.use(
   "/api-docs",
@@ -98,6 +104,9 @@ app.use(
     .swagger-ui .topbar .topbar-wrapper { 
       max-width: 1460px;
       margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      flex-direction: row-reverse;
     }
     .swagger-ui .topbar .topbar-wrapper .link { 
       display: none;
@@ -142,6 +151,7 @@ app.use(
 // Rate Limiting
 // Rate Limiting
 app.use("/api/v1/user/auth/login", express.json(), loginRateLimiter);
+app.use("/api/v1/user/auth/forgot-password", express.json(), otpRateLimiter);
 
 // Setup Proxies
 setupProxies(app);

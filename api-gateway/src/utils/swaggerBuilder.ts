@@ -83,6 +83,25 @@ const gone = {
   },
 };
 
+const limitExceed = {
+  login: {
+    message: "Too many login attempts, please try again after 15 minutes",
+    code: "LOGIN_RATE_LIMIT_EXCEEDED",
+  },
+  "forgot-password": {
+    message:
+      "Too many OTP requests. Only 3 OTPs allowed per 24 hours. Please try again later.",
+    code: "OTP_RATE_LIMIT_EXCEEDED",
+  },
+};
+
+const validationError = {
+  "verify-otp": {
+    message: "Invalid OTP!",
+    code: "INVALID_OTP",
+  },
+};
+
 const internalServerErrorMessage = (path: string) => {
   const mainPath = path.split("/").pop() || "";
   const errorInfo = internalserver[mainPath as keyof typeof internalserver];
@@ -120,6 +139,26 @@ const goneErrorMessage = (path: string) => {
   return {
     message: errorInfo?.message || "Gone",
     code: errorInfo?.code || "GONE",
+  };
+};
+
+const validationErrorMessage = (path: string) => {
+  const mainPath = path.split("/").pop() || "";
+  const errorInfo = validationError[mainPath as keyof typeof validationError];
+
+  return {
+    message: errorInfo?.message || "Validation error",
+    code: errorInfo?.code || "VALIDATION_ERROR",
+  };
+};
+
+const limitExceedErrorMessage = (path: string) => {
+  const mainPath = path.split("/").pop() || "";
+  const errorInfo = limitExceed[mainPath as keyof typeof limitExceed];
+
+  return {
+    message: errorInfo?.message || "Limit exceeded",
+    code: errorInfo?.code || "LIMIT_EXCEEDED",
   };
 };
 
@@ -239,14 +278,14 @@ export class SwaggerBuilder {
           example:
             statusCode >= 400
               ? {
-                code: "",
-                message: "",
-                details: {
-                  field: "",
+                  code: "",
                   message: "",
-                  nullable: true,
-                },
-              }
+                  details: {
+                    field: "",
+                    message: "",
+                    nullable: true,
+                  },
+                }
               : null,
         },
         requestContext: {
@@ -316,23 +355,27 @@ export class SwaggerBuilder {
               success: false,
               status: {
                 code: 422,
-                description: "Validation Error",
+                description: path.includes("verify-otp")
+                  ? "Invalid OTP"
+                  : "Validation Error",
               },
-              message: "Validation failed!",
+              message: validationErrorMessage(path).message,
               timestamp: "2025-12-16T07:19:20.000Z",
               responseTimeMs: 14,
               requestId: "123e4567-e89b-12d3-a456-426614174000",
               locale: "en-US",
               data: null,
               error: {
-                code: "VALIDATION_ERROR",
-                message: "Validation failed!",
-                details: [
-                  {
-                    field: "field name",
-                    message: "field validation message",
-                  },
-                ],
+                code: validationErrorMessage(path).code,
+                message: validationErrorMessage(path).message,
+                ...(!path.includes("verify-otp") && {
+                  details: [
+                    {
+                      field: "field name",
+                      message: "field validation message",
+                    },
+                  ],
+                }),
               },
               requestContext: {
                 path: path,
@@ -538,6 +581,44 @@ export class SwaggerBuilder {
           },
         },
       },
+      LimitExceedError: {
+        description: "Limit Exceed Error",
+        content: {
+          "application/json": {
+            schema: SwaggerBuilder.getResponseWrapper(
+              {
+                type: "object",
+                properties: {
+                  message: { type: "string", example: "Limit exceeded!" },
+                  code: { type: "string", example: "LIMIT_EXCEEDED" },
+                },
+              },
+              429
+            ),
+            example: {
+              success: false,
+              status: {
+                code: 429,
+                description: "Limit Exceeded Error",
+              },
+              message: limitExceedErrorMessage(path).message,
+              timestamp: "2025-12-16T07:19:20.000Z",
+              responseTimeMs: 14,
+              requestId: "123e4567-e89b-12d3-a456-426614174000",
+              locale: "en-US",
+              data: null,
+              error: {
+                message: limitExceedErrorMessage(path).message,
+                code: limitExceedErrorMessage(path).code,
+              },
+              requestContext: {
+                path: path,
+                method: method,
+              },
+            },
+          },
+        },
+      },
     };
   }
 
@@ -556,7 +637,7 @@ export class SwaggerBuilder {
       requestBody,
       successDataSchema,
       successExample,
-      errorCodes = ["422", "401", "500", "409"],
+      errorCodes = ["422", "401", "500", "409", "429"],
       security = [],
     } = config;
 
@@ -583,6 +664,7 @@ export class SwaggerBuilder {
         "410": "GoneError",
         "500": "InternalServerError",
         "409": "ConflictError",
+        "429": "LimitExceedError",
       }[code];
 
       if (errorKey && standardErrors[errorKey as keyof typeof standardErrors]) {

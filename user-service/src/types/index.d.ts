@@ -23,3 +23,9 @@ interface UserResponse {
   updatedAt: Date;
   lastLoginAt: Date;
 }
+
+interface ResetPasswordPayload {
+  purpose: string;
+  sessionId: string;
+  userId: string;
+}

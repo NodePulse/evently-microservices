@@ -54,6 +54,8 @@ model User {
   
   // Relations
   accounts              Account[]
+
+  passwordResets        PasswordReset[]
 }
 
 model Account {
@@ -74,12 +76,17 @@ model Account {
   @@unique([provider, providerAccountId])
 }
 
-model Otp {
-  id        String   @id @default(cuid())
-  email     String
-  code      String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+model PasswordReset {
+  id          String   @id @default(uuid()) // resetSessionId
+  userId      String
+  otpHash     String
+  expiresAt   DateTime
+  otpUsedAt   DateTime?
+  tokenUsedAt DateTime?
+  createdAt   DateTime @default(now())
 
-  @@index([email])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
+
