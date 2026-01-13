@@ -7,3 +7,18 @@ dist
 .env.dev
 .env.prod
 *.log
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
+local.db
+
+# Wrangler cache
+.wrangler
+.dev.vars
+
+# Documentation (optional - remove if you want to keep)
+D1_SUCCESS.md
+D1_QUICKREF.md
+

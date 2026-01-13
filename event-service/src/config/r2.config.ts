@@ -6,7 +6,10 @@ import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
 
-const s3 = new S3Client({
+// ... existing imports ...
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+
+export const s3 = new S3Client({
   region: "auto",
   endpoint: process.env.R2_ENDPOINT,
   credentials: {
@@ -14,6 +17,26 @@ const s3 = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   },
 });
+
+export const uploadToR2 = async (
+  buffer: Buffer,
+  filename: string,
+  contentType: string
+): Promise<string> => {
+  const key = `tickets/${filename}`;
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET!,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+    ACL: "public-read",
+  });
+
+  await s3.send(command);
+
+  const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+  return publicUrl;
+};
 
 export const upload = multer({
   storage: multerS3({

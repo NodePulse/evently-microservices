@@ -1,0 +1,20 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  recipient String   // Email or Push Token
+  type      String   // EMAIL or PUSH (e.g. EVENT_REGISTRATION)
+  event     String?  // Event type/name
+  status    String   // SUCCESS or FAILED
+  error     String?
+  metadata  Json?
+  title     String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

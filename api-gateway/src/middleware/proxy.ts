@@ -141,18 +141,19 @@ export const setupProxies = (app: any) => {
   // Event Service
   // /api/v1/events -> /
   app.use(
-    "/api/v1/events",
+    "/api/v1/events/event",
     createProxy(config.services.event.url, {
-      "^/api/v1/events": "/",
+      "^/api/v1/events/event": "/event",
     })
   );
 
   // Ticket Service
-  // /api/v1/ticket/tickets -> /tickets (assuming standard)
+  // Tickets (Handled by Event Service now)
+  // /api/v1/events/ticket -> /ticket
   app.use(
-    "/api/v1/ticket/tickets",
-    createProxy(config.services.ticket.url, {
-      "^/api/v1/ticket/tickets": "/tickets",
+    "/api/v1/events/ticket",
+    createProxy(config.services.event.url, {
+      "^/api/v1/events/ticket": "/ticket",
     })
   );
 
@@ -162,6 +163,15 @@ export const setupProxies = (app: any) => {
     "/api/v1/payment/payments",
     createProxy(config.services.payment.url, {
       "^/api/v1/payment/payments": "/payments",
+    })
+  );
+
+  // Notification Service
+  // /api/v1/notifications -> /
+  app.use(
+    "/api/v1/notifications",
+    createProxy(config.services.notification.url, {
+      "^/api/v1/notifications": "/",
     })
   );
 };

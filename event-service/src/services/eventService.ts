@@ -1,7 +1,13 @@
-import { z } from "zod";
+import { cuid, z } from "zod";
 import { createLogger, format, transports } from "winston";
-import { Event } from "../models/Event";
-import { ERROR_CODES } from "../constants/errorCodes";
+import { eventRepository } from "../repositories/event.repository";
+import { registrationRepository } from "../repositories/registration.repository";
+import { rabbitMQService } from "./rabbitmq.service";
+import { v4 as uuidv4 } from "uuid";
+import { ticketRepository } from "../repositories/ticket.repository";
+import { ticketGenerator } from "./ticketGenerator";
+import { generateTicketCode } from "../utils/ticketCode";
+import { userRepository } from "../repositories/user.repository";
 
 const logger = createLogger({
   level: "info",
@@ -52,7 +58,7 @@ const CreateEventSchema = z
       "Networking",
     ]),
     eventType: z.enum(["offline", "online", "hybrid"]),
-    maxAttendees: z.coerce.number().int().min(1).max(50).optional(),
+    maxAttendees: z.coerce.number().int().min(1).max(50).default(10).optional(),
     tags: z.string().max(200).optional(),
     eventUrl: z.string().url().optional(),
     contactEmail: z.string().email().optional(),
@@ -91,7 +97,7 @@ const CreateEventSchema = z
     (data) => {
       const startDate = new Date(data.startDate);
       const endDate = new Date(data.endDate);
-      return endDate > startDate;
+      return endDate >= startDate;
     },
     {
       message: "End date must be after start date",
@@ -119,6 +125,7 @@ export const createEvent = async (
   }
 
   // Validate input
+  data.id = uuidv4();
   const result = CreateEventSchema.safeParse(data);
   if (!result.success) {
     const errors = result.error.issues.map((issue) => ({
@@ -143,42 +150,47 @@ export const createEvent = async (
       hybrid: "HYBRID",
     };
 
-    const newEvent = await Event.create({
+    const newEvent = await eventRepository.create({
+      id: data.id,
       title: validatedData.title,
       description: validatedData.description,
       body: validatedData.body,
       location: validatedData.location,
-      startDate: new Date(validatedData.startDate),
-      endDate: new Date(validatedData.endDate),
-      startTime: validatedData.startTime,
-      endTime: validatedData.endTime,
+      start_date: validatedData.startDate,
+      end_date: validatedData.endDate,
+      start_time: validatedData.startTime,
+      end_time: validatedData.endTime,
       price: validatedData.price,
       currency: validatedData.currency,
       category: validatedData.category,
-      eventType: eventTypeMap[validatedData.eventType],
-      imageUrl: validatedData.imageUrl,
-      videoUrl: validatedData.videoUrl,
-      organizerId: userId,
-      maxAttendees: validatedData.maxAttendees,
+      event_type: eventTypeMap[validatedData.eventType],
+      image_url: validatedData.imageUrl,
+      video_url: validatedData.videoUrl,
+      organizer_id: userId,
+      max_attendees: validatedData.maxAttendees,
       tags: validatedData.tags,
-      eventUrl: validatedData.eventUrl,
-      contactEmail: validatedData.contactEmail,
-      contactPhone: validatedData.contactPhone,
+      event_url: validatedData.eventUrl,
+      contact_email: validatedData.contactEmail,
+      contact_phone: validatedData.contactPhone,
       requirements: validatedData.requirements,
-      refundPolicy: validatedData.refundPolicy,
-      ageRestriction: validatedData.ageRestriction,
-      registrationDeadline: validatedData.registrationDeadline
-        ? new Date(validatedData.registrationDeadline)
-        : undefined,
-      allowWaitlist: validatedData.allowWaitlist || false,
-      sendReminders: validatedData.sendReminders !== false,
-      allowGuestRegistration: validatedData.allowGuestRegistration || false,
-      isPublished: validatedData.isPublished !== false,
+      refund_policy: validatedData.refundPolicy,
+      age_restriction: validatedData.ageRestriction,
+      registration_deadline: validatedData.registrationDeadline,
+      allow_waitlist: validatedData.allowWaitlist || false,
+      send_reminders: validatedData.sendReminders !== false,
+      allow_guest_registration: validatedData.allowGuestRegistration || false,
+      is_published: validatedData.isPublished !== false,
+    });
+
+    await rabbitMQService.publish("event-creation", {
+      eventType: "EVENT_CREATED",
+      eventId: newEvent.id,
+      userId: userId,
     });
 
     logger.info("Event created successfully", {
       requestId,
-      eventId: newEvent._id,
+      eventId: newEvent.id,
       userId,
     });
 
@@ -216,7 +228,7 @@ export const getEventsCount = async (
   }
 
   try {
-    const count = await Event.countDocuments({ organizerId });
+    const count = await eventRepository.countByOrganizer(organizerId);
 
     logger.info("Event count fetched successfully", {
       requestId,
@@ -246,24 +258,7 @@ export const getEventsGroupedByUser = async (
   headers?: Record<string, any>
 ): Promise<any> => {
   try {
-    const stats = await Event.aggregate([
-      {
-        $group: {
-          _id: "$organizerId",
-          organized_events: { $sum: 1 },
-          total_attendees: { $sum: "$maxAttendees" },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          userId: "$_id",
-          organized_events: 1,
-          attended_events: { $literal: 0 }, // Placeholder as we don't track attendance yet
-          total_attendees: 1,
-        },
-      },
-    ]);
+    const stats = await eventRepository.getStatsGroupedByUser();
 
     logger.info("Events grouped by user fetched successfully", { requestId });
     return {
@@ -300,9 +295,7 @@ export const getMyEvents = async (
   }
 
   try {
-    const events = await Event.find({ organizerId: userId }).sort({
-      createdAt: -1,
-    });
+    const events = await eventRepository.findByOrganizer(userId);
 
     logger.info("User events fetched successfully", { requestId, userId });
     return {
@@ -333,30 +326,15 @@ export const getAllEvents = async (
 
     const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
     const limitNum = Math.max(parseInt(limit as string, 10) || 10, 1);
-    const skip = (pageNum - 1) * limitNum;
 
-    const now = new Date();
-    const filter: any = {};
+    const filters: any = {};
+    if (search) filters.search = search;
+    if (status) filters.status = status;
 
-    if (search) {
-      filter.$text = { $search: search };
-    }
-
-    if (status) {
-      if (status === "upcoming") {
-        filter.startDate = { $gt: now };
-      } else if (status === "ongoing") {
-        filter.startDate = { $lte: now };
-        filter.endDate = { $gte: now };
-      } else if (status === "completed") {
-        filter.endDate = { $lt: now };
-      }
-    }
-
-    const [events, totalItems] = await Promise.all([
-      Event.find(filter).sort({ startDate: 1 }).skip(skip).limit(limitNum),
-      Event.countDocuments(filter),
-    ]);
+    const { events, total } = await eventRepository.findAll(filters, {
+      page: pageNum,
+      limit: limitNum,
+    });
 
     logger.info("All events fetched successfully", { requestId });
     return {
@@ -365,8 +343,8 @@ export const getAllEvents = async (
       data: {
         events,
         pagination: {
-          totalItems,
-          totalPages: Math.ceil(totalItems / limitNum),
+          totalItems: total,
+          totalPages: Math.ceil(total / limitNum),
           currentPage: pageNum,
           pageSize: limitNum,
         },
@@ -401,7 +379,7 @@ export const getEventById = async (
   }
 
   try {
-    const event = await Event.findById(id);
+    const event = await eventRepository.findById(id);
 
     if (!event) {
       logger.warn("Event not found", { requestId, eventId: id });
@@ -423,6 +401,317 @@ export const getEventById = async (
     return {
       status: 500,
       message: "Failed to fetch event",
+      data: null,
+    };
+  }
+};
+
+export const getRegistrationByUserAndEvent = async (
+  requestId: string,
+  data: any,
+  headers?: Record<string, any>
+): Promise<any> => {
+  const { id } = data || {};
+  const userId = headers?.["x-user-id"];
+
+  if (!userId) {
+    return {
+      status: 401,
+      message: "User not authenticated",
+      data: null,
+    };
+  }
+
+  if (!id) {
+    return {
+      status: 400,
+      message: "Event ID is required",
+      data: null,
+    };
+  }
+
+  try {
+    const registration = await registrationRepository.findByUserAndEvent(
+      userId,
+      id
+    );
+
+    if (!registration) {
+      logger.warn("Registration not found", { requestId, eventId: id });
+      return {
+        status: 200,
+        message: "Registration not found",
+        data: {
+          registered: false,
+          eventId: id,
+        },
+      };
+    }
+
+    logger.info("Registration fetched successfully", {
+      requestId,
+      eventId: id,
+    });
+    return {
+      status: 200,
+      message: "Registration fetched successfully",
+      data: registration,
+    };
+  } catch (error) {
+    logger.error("Failed to fetch registration", { requestId, error });
+    return {
+      status: 500,
+      message: "Failed to fetch registration",
+      data: null,
+    };
+  }
+};
+
+export const joinEvent = async (
+  requestId: string,
+  data: any,
+  headers?: Record<string, any>
+): Promise<any> => {
+  const { id } = data || {};
+  const userId = headers?.["x-user-id"];
+
+  if (!userId) {
+    return {
+      status: 401,
+      message: "User not authenticated",
+      data: null,
+    };
+  }
+
+  if (!id) {
+    return {
+      status: 400,
+      message: "Event ID is required",
+      data: null,
+    };
+  }
+
+  try {
+    const eventId = id;
+    const event = await eventRepository.findById(eventId);
+
+    if (!event) {
+      return {
+        status: 404,
+        message: "Event not found",
+        data: null,
+      };
+    }
+
+    // Check if user is organizer
+    if (event.organizer_id === userId) {
+      return {
+        status: 400,
+        message: "Organizer cannot join their own event",
+        data: null,
+      };
+    }
+
+    // Check if event is paid - paid events require payment processing
+    if (event.price > 0) {
+      return {
+        status: 402, // Payment Required
+        message: "This is a paid event. Please complete payment to register.",
+        data: {
+          eventId: event.id,
+          price: event.price,
+          currency: event.currency,
+          requiresPayment: true,
+        },
+      };
+    }
+
+    // Check if already registered
+    const existingRegistration =
+      await registrationRepository.findByUserAndEvent(userId, eventId);
+
+    if (existingRegistration) {
+      return {
+        status: 409, // Conflict
+        message: "User already joined this event",
+        data: null,
+      };
+    }
+
+    // Check capacity
+    if (event.max_attendees && event.current_attendees >= event.max_attendees) {
+      return {
+        status: 400,
+        message: "Event is full",
+        data: null,
+      };
+    }
+
+    // Register user
+    const registrationId = uuidv4();
+    const registration = await registrationRepository.create({
+      id: registrationId,
+      eventId,
+      userId,
+      status: "confirmed",
+    });
+
+    // Create ticket for the user
+    console.log("Creating ticket for user", userId, "event", eventId);
+    let ticket = await ticketRepository.create({
+      id: uuidv4(),
+      eventId,
+      userId,
+      registrationId: registration.id,
+      ticketCode: generateTicketCode({
+        eventId,
+        userId,
+        registrationId,
+        name: data.name,
+      }),
+      status: "valid", // Ticket is valid, but content is pending generation
+    });
+
+    // Publish Ticket Generation Request (Async)
+    await rabbitMQService.publish("ticket-generation", {
+      eventType: "TICKET_REQUESTED",
+      ticketId: ticket.id,
+      eventId: eventId,
+      userId: userId,
+      // Pass other necessary data if needed to avoid worker fetching too much
+      ticketCode: ticket.ticketCode,
+      userName: data.username,
+      name: data.name,
+    });
+
+    // Also publish event-registration for other services (analytics, emails, etc.)
+    await rabbitMQService.publish("event-registration", {
+      registrationId: registration.id,
+      eventId: eventId,
+      userId: userId,
+      ticketId: ticket.id,
+      eventTitle: event.title,
+      eventDate: [event.start_date, event.end_date],
+      eventTime: [event.start_time, event.end_time],
+      eventLocation: event.location,
+      registeredAt: registration.registeredAt,
+      ticketCode: ticket.ticketCode,
+    });
+
+    logger.info("User joined event, ticket generation queued", {
+      requestId,
+      userId,
+      eventId,
+      ticketId: ticket.id,
+    });
+
+    return {
+      status: 200,
+      message: "Joined event successfully. Ticket is being generated.",
+      data: {
+        registration,
+        ticket: ticket, // Ticket will have ticketImageUrl as null/undefined initially
+      },
+    };
+  } catch (error) {
+    logger.error("Failed to join event", { requestId, error });
+    return {
+      status: 500,
+      message: "Failed to join event",
+      data: null,
+    };
+  }
+};
+
+/**
+ * Get all attendees for an event
+ */
+export const getEventAttendees = async (
+  requestId: string,
+  data: any,
+  headers?: Record<string, any>
+): Promise<any> => {
+  const { id, search, page = "1", limit = "10" } = data || {};
+  logger.info("getEventAttendees called", {
+    requestId,
+    id,
+    search,
+    page,
+    limit,
+  });
+
+  if (!id) {
+    return {
+      status: 400,
+      message: "Event ID is required",
+      data: null,
+    };
+  }
+
+  try {
+    const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit as string, 10) || 10, 1);
+
+    // const registrations = await registrationRepository.findByEventId(id);
+    // const organizer_id = await eventRepository.findById(id);
+    // if (!organizer_id) {
+    //   return {
+    //     status: 404,
+    //     message: "Event not found",
+    //     data: null,
+    //   };
+    // }
+
+    // // Extract only user IDs
+    // const userIds = registrations.map((reg) => reg.userId);
+    // userIds.push(organizer_id.organizer_id);
+
+    // Fetch all users matching search criteria (always including organizer)
+    const allUsers = await userRepository.findByUserIds(
+      // userIds,
+      id,
+      search
+      // organizer_id.organizer_id
+    );
+
+    logger.info("Event attendees fetched successfully", {
+      requestId,
+      eventId: id,
+      // count: userIds.length,
+    });
+
+    const organizer = allUsers.find(
+      (user: any) => user.eventRole === "ORGANIZER"
+    );
+    const allAttendees = allUsers.filter(
+      (user: any) => user.eventRole === "ATTENDEE"
+    );
+
+    // Apply pagination to attendees only
+    const totalAttendees = allAttendees.length;
+    const startIndex = (pageNum - 1) * limitNum;
+    const endIndex = startIndex + limitNum;
+    const paginatedAttendees = allAttendees.slice(startIndex, endIndex);
+
+    return {
+      status: 200,
+      message: "Event attendees fetched successfully",
+      data: {
+        organizer: organizer || null,
+        attendees: paginatedAttendees,
+        pagination: {
+          totalItems: totalAttendees,
+          totalPages: Math.ceil(totalAttendees / limitNum),
+          currentPage: pageNum,
+          pageSize: limitNum,
+        },
+      },
+    };
+  } catch (error) {
+    logger.error("Failed to fetch event attendees", { requestId, error });
+    return {
+      status: 500,
+      message: "Failed to fetch event attendees",
       data: null,
     };
   }

@@ -71,11 +71,13 @@ export const createEvent = async (req: Request, res: Response) => {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (files.image && files.image[0]) {
-      req.body.imageUrl = (files.image[0] as any).location;
+      const key = (files.image[0] as any).key;
+      req.body.imageUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
     }
 
     if (files.video && files.video[0]) {
-      req.body.videoUrl = (files.video[0] as any).location;
+      const key = (files.video[0] as any).key;
+      req.body.videoUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
     }
   }
 
@@ -127,4 +129,48 @@ export const uploadImage = async (req: Request, res: Response) => {
     meta: { apiVersion: "v1" },
     requestContext: { path: req.path, method: req.method },
   });
+};
+
+export const joinEvent = async (req: Request, res: Response) => {
+  const requestId = uuidv4();
+  const { id } = req.params;
+  const { name } = req.body;
+
+  const result = await eventService.joinEvent(
+    requestId,
+    { id, name },
+    req.headers as any
+  );
+
+  res.status(result.status || 500).json(result);
+};
+
+export const getRegistrationByUserAndEvent = async (
+  req: Request,
+  res: Response
+) => {
+  const requestId = uuidv4();
+  const { id } = req.params;
+
+  const result = await eventService.getRegistrationByUserAndEvent(
+    requestId,
+    { id },
+    req.headers as any
+  );
+
+  res.status(result.status || 500).json(result);
+};
+
+export const getEventAttendees = async (req: Request, res: Response) => {
+  const requestId = uuidv4();
+  const { id } = req.params;
+  const { search, page, limit } = req.query;
+
+  const result = await eventService.getEventAttendees(
+    requestId,
+    { id, search, page, limit },
+    req.headers as any
+  );
+
+  res.status(result.status || 500).json(result);
 };

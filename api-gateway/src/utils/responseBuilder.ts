@@ -18,7 +18,7 @@ export interface MetaData {
 export interface ErrorResponse {
   message: string;
   code?: string;
-  details?: Array<{ field: string; issue: string; path?: string }>;
+  details?: Array<{ field: string; message: string }>;
   stack?: string | undefined;
 }
 
@@ -274,9 +274,17 @@ export class ResponseBuilder {
         description: STATUS_MESSAGES[this.statusCode] || "Unknown Status",
       },
       message:
-        this.message ||
-        STATUS_MESSAGES[this.statusCode] ||
-        "Request processed.",
+        this.statusCode === 422
+          ? this.error?.details
+            ? this.error?.details
+                ?.map(
+                  (detail: { field: string; message: string }) => detail.message
+                )
+                .join(", ")
+            : "Validation Error"
+          : this.message ||
+            STATUS_MESSAGES[this.statusCode] ||
+            "Request processed.",
       timestamp: new Date().toISOString(),
       responseTimeMs,
       requestId: this.requestId,

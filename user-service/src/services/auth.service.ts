@@ -4,11 +4,11 @@ import jwt, { JwtPayload } from 'jsonwebtoken';
 import prisma from '../prisma';
 import { config } from '../config';
 import { getImageUrl } from '../utils/commonFunction';
-import { eventPublisher } from './eventPublisher';
 import { AppError } from '../utils/AppError';
 import { ERROR_CODES } from '../constants/errorCodes';
 import { logger } from '../utils/logger';
 import { AppResponse } from '../utils/AppResponse';
+import { rabbitMQService } from './rabbitmq.service';
 
 export const AuthService = {
   getTransporter: () => {
@@ -100,19 +100,17 @@ export const AuthService = {
 
       const accessToken = AuthService.getAccessToken(payload);
 
-      try {
-        await eventPublisher.publishUserCreated({
-          id: newUser.id,
-          email: newUser.email,
-          username: newUser.username,
-          name: newUser.name || null,
-          image: newUser.image || null,
-          role: newUser.role,
-          gender: newUser.gender || null,
-        });
-      } catch (error) {
-        logger.error(`Failed to publish user created event: ${error}`);
-      }
+      rabbitMQService.publish('user-creation', {
+        userId: newUser.id,
+        email: newUser.email,
+        username: newUser.username,
+        name: newUser.name,
+        gender: newUser.gender,
+        image: newUser.image,
+        role: newUser.role,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt,
+      });
 
       logger.info(`User registered successfully: ${newUser.id}`);
       return new AppResponse(201, 'Registration successful', {
